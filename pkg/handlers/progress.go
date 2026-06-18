@@ -1,12 +1,20 @@
 package handlers
 
 import (
-	"github.com/cheggaaa/pb/v3"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/spider-pigs/spidomtr"
 )
 
+const barWidth = 68
+
 type progressBar struct {
-	bar *pb.ProgressBar
+	count   int
+	current int
+	start   time.Time
 }
 
 // ProgressBar is a runner handler that displays a running progress
@@ -18,15 +26,28 @@ func ProgressBar() spidomtr.RunnerHandler {
 // RunnerStarted is called when runner is started (prior to any tests
 // have been run).
 func (b *progressBar) RunnerStarted(id, description string, count int) {
-	b.bar = pb.StartNew(count)
+	b.count = count
+	b.start = time.Now()
 }
 
 // TestDone is called when a test has been completed.
 func (b *progressBar) TestDone(spidomtr.TestResult) {
-	b.bar.Increment()
+	b.current++
+	filled := barWidth * b.current / b.count
+	var bar string
+	if b.current == b.count {
+		bar = strings.Repeat("=", barWidth)
+	} else if filled > 0 {
+		bar = strings.Repeat("=", filled-1) + ">" + strings.Repeat(" ", barWidth-filled)
+	} else {
+		bar = strings.Repeat(" ", barWidth)
+	}
+	pct := 100 * b.current / b.count
+	elapsed := time.Since(b.start).Truncate(time.Second)
+	fmt.Fprintf(os.Stderr, "\r[%s] %3d%% %4s", bar, pct, elapsed)
 }
 
 // RunnerDone is called when the runner has run all tests.
 func (b *progressBar) RunnerDone(spidomtr.Result) {
-	b.bar.Finish()
+	fmt.Fprintln(os.Stderr)
 }
