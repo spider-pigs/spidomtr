@@ -75,5 +75,4 @@ func (logger *TestLogger) RunnerDone(res spidomtr.Result) {
 
 	fmt.Fprintf(logger.Buffer, "%s\n%s %s\n%s\n", divider, mark, str, divider)
 	logger.Log.Print(logger.Buffer.String())
-	logger.Log.Printf("%s\n%s %s\n%s\n", divider, mark, str, divider)
 }
