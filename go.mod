@@ -1,3 +1,3 @@
 module github.com/spider-pigs/spidomtr
 
-go 1.15
+go 1.16
