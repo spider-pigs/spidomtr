@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -108,14 +109,14 @@ func TestRunAgainstServer(t *testing.T) {
 	base := []string{"-n", "4", "-c", "3", "-m", "POST", "-H", "X-Test: yes", "-d", "hello",
 		"-no-logo", "-progress=false", "-fail-on-error"}
 
-	if code := run(context.Background(), append(base, srv.URL), io.Discard); code != 0 {
+	if code := run(context.Background(), append(base, srv.URL), io.Discard, io.Discard); code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
 	if h := atomic.LoadInt32(&hits); h != 12 {
 		t.Errorf("hits = %d, want 12", h)
 	}
 
-	if code := run(context.Background(), append(base, "-expect", "200", srv.URL), io.Discard); code != 1 {
+	if code := run(context.Background(), append(base, "-expect", "200", srv.URL), io.Discard, io.Discard); code != 1 {
 		t.Errorf("exit code = %d, want 1 for unexpected status", code)
 	}
 }
@@ -132,13 +133,13 @@ func TestRunUserAgent(t *testing.T) {
 		flags []string
 		check func([]string) bool
 	}{
-		{"default", nil, func(ua []string) bool { return len(ua) == 1 && strings.HasPrefix(ua[0], "spidomtr") }},
+		{"default", nil, func(ua []string) bool { return len(ua) == 1 && ua[0] == "spidomtr/"+version() }},
 		{"override", []string{"-H", "user-agent: custom/1.0"}, func(ua []string) bool { return len(ua) == 1 && ua[0] == "custom/1.0" }},
 		{"disabled", []string{"-H", "User-Agent:"}, func(ua []string) bool { return len(ua) == 0 }},
 	}
 	for _, c := range cases {
 		args := append([]string{"-n", "1", "-no-logo", "-progress=false"}, c.flags...)
-		if code := run(context.Background(), append(args, srv.URL), io.Discard); code != 0 {
+		if code := run(context.Background(), append(args, srv.URL), io.Discard, io.Discard); code != 0 {
 			t.Fatalf("%s: exit code = %d", c.name, code)
 		}
 		if ua := <-agents; !c.check(ua) {
@@ -155,7 +156,7 @@ func TestRunHostHeader(t *testing.T) {
 	defer srv.Close()
 
 	args := []string{"-n", "1", "-H", "Host: custom.example", "-no-logo", "-progress=false", srv.URL}
-	if code := run(context.Background(), args, io.Discard); code != 0 {
+	if code := run(context.Background(), args, io.Discard, io.Discard); code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
 	if got := <-hosts; got != "custom.example" {
@@ -169,7 +170,7 @@ func TestRunVerboseConcurrent(t *testing.T) {
 	defer srv.Close()
 
 	args := []string{"-n", "20", "-c", "4", "-v", "-no-logo", srv.URL}
-	if code := run(context.Background(), args, io.Discard); code != 0 {
+	if code := run(context.Background(), args, io.Discard, io.Discard); code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
 }
@@ -181,25 +182,40 @@ func TestRunInterrupted(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	args := []string{"-n", "3", "-no-logo", "-progress=false", srv.URL}
-	if code := run(ctx, args, io.Discard); code != 130 {
+	if code := run(ctx, args, io.Discard, io.Discard); code != 130 {
 		t.Errorf("exit code = %d, want 130", code)
+	}
+}
+
+func TestRunVersion(t *testing.T) {
+	var stdout, stderr strings.Builder
+	if code := run(context.Background(), []string{"version"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit code = %d, stderr = %q", code, stderr.String())
+	}
+	want := "spidomtr " + version() + " (" + runtime.Version() + " " + runtime.GOOS + "/" + runtime.GOARCH + ")\n"
+	if got := stdout.String(); got != want {
+		t.Errorf("version output = %q, want %q", got, want)
+	}
+
+	if code := run(context.Background(), []string{"version", "extra"}, io.Discard, io.Discard); code != 2 {
+		t.Errorf("version with argument exit code = %d, want 2", code)
 	}
 }
 
 func TestRunUsageErrors(t *testing.T) {
 	var sb strings.Builder
-	if code := run(context.Background(), []string{"-h"}, &sb); code != 0 {
+	if code := run(context.Background(), []string{"-h"}, io.Discard, &sb); code != 0 {
 		t.Errorf("-h exit code = %d", code)
 	}
-	if !strings.Contains(sb.String(), "Usage: spidomtr") {
+	if !strings.Contains(sb.String(), "spidomtr version") {
 		t.Errorf("usage not printed: %q", sb.String())
 	}
-	if code := run(context.Background(), nil, io.Discard); code != 2 {
+	if code := run(context.Background(), nil, io.Discard, io.Discard); code != 2 {
 		t.Errorf("missing url exit code = %d, want 2", code)
 	}
 
 	sb.Reset()
-	if code := run(context.Background(), []string{"-n", "abc", "http://x"}, &sb); code != 2 {
+	if code := run(context.Background(), []string{"-n", "abc", "http://x"}, io.Discard, &sb); code != 2 {
 		t.Errorf("bad flag exit code = %d, want 2", code)
 	}
 	if n := strings.Count(sb.String(), `invalid value "abc"`); n != 1 {

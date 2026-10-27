@@ -144,7 +144,14 @@ Tests:
 go install github.com/spider-pigs/spidomtr/cmd/spidomtr@latest
 ```
 
-Make sure `$(go env GOPATH)/bin` is on your `PATH`, then run `spidomtr -h` to see all flags.
+Make sure `$(go env GOPATH)/bin` is on your `PATH`, then check the install:
+
+```console
+$ spidomtr version
+spidomtr v0.0.9 (go1.27.3 darwin/arm64)
+```
+
+Run `spidomtr -h` to see all flags.
 
 ### Examples
 

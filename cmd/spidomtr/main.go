@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -43,7 +44,7 @@ func main() {
 		cancel()
 	}()
 
-	os.Exit(run(ctx, os.Args[1:], os.Stderr))
+	os.Exit(run(ctx, os.Args[1:], os.Stdout, os.Stderr))
 }
 
 // headerFlags collects repeatable "Key: Value" header flags.
@@ -134,7 +135,7 @@ func parseFlags(args []string, stderr io.Writer) (*config, error) {
 	fs := flag.NewFlagSet("spidomtr", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() {
-		fmt.Fprint(stderr, "Usage: spidomtr [flags] <url>\n\nLoad test a URL.\n\nFlags:\n")
+		fmt.Fprint(stderr, "Usage:\n  spidomtr [flags] <url>   load test a URL\n  spidomtr version         print version information\n\nFlags:\n")
 		fs.PrintDefaults()
 		fmt.Fprint(stderr, "\nExample:\n  spidomtr -n 100 -c 10 -m POST -H 'Content-Type: application/json' -d '{\"a\":1}' https://example.com/api\n")
 	}
@@ -233,11 +234,22 @@ func parseFlags(args []string, stderr io.Writer) (*config, error) {
 	return cfg, nil
 }
 
-func userAgent() string {
+// version returns the module version from the build info. Release builds
+// (go install ...@vX.Y.Z) report the tag, local builds a pseudo-version and
+// builds without version information (go run, -buildvcs=false) "devel".
+func version() string {
 	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
-		return "spidomtr/" + info.Main.Version
+		return info.Main.Version
 	}
-	return "spidomtr"
+	return "devel"
+}
+
+func userAgent() string {
+	return "spidomtr/" + version()
+}
+
+func printVersion(w io.Writer) {
+	fmt.Fprintf(w, "spidomtr %s (%s %s/%s)\n", version(), runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
 func newClient(cfg *config) *http.Client {
@@ -307,7 +319,16 @@ func newHTTPTest(cfg *config, client *http.Client) testunit.TestUnit {
 	)
 }
 
-func run(ctx context.Context, args []string, stderr io.Writer) int {
+func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "version" {
+		if len(args) > 1 {
+			fmt.Fprintln(stderr, "error: version takes no arguments")
+			return 2
+		}
+		printVersion(stdout)
+		return 0
+	}
+
 	cfg, err := parseFlags(args, stderr)
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
