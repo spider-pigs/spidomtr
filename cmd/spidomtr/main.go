@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -212,6 +213,11 @@ func parseFlags(args []string, stderr io.Writer) (*config, error) {
 	if cfg.id == "" {
 		cfg.id = cfg.url
 	}
+	// Identify the tool unless the user sets User-Agent, even to an empty
+	// value (which makes net/http omit the header).
+	if _, ok := cfg.headers["User-Agent"]; !ok {
+		cfg.headers.Set("User-Agent", userAgent())
+	}
 
 	switch {
 	case bodyFile != "":
@@ -225,6 +231,13 @@ func parseFlags(args []string, stderr io.Writer) (*config, error) {
 	}
 
 	return cfg, nil
+}
+
+func userAgent() string {
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return "spidomtr/" + info.Main.Version
+	}
+	return "spidomtr"
 }
 
 func newClient(cfg *config) *http.Client {
