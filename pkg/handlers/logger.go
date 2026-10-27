@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/spider-pigs/spidomtr"
@@ -30,6 +31,9 @@ const (
 type TestLogger struct {
 	Log    *log.Logger
 	Buffer *bytes.Buffer
+
+	// TestDone is called concurrently when the runner has multiple users.
+	mu sync.Mutex
 }
 
 // Logger logs tests during the test run
@@ -48,6 +52,8 @@ func (logger *TestLogger) RunnerStarted(id, description string, count int) {
 
 // TestDone is called when a test has been completed.
 func (logger *TestLogger) TestDone(res spidomtr.TestResult) {
+	logger.mu.Lock()
+	defer logger.mu.Unlock()
 	switch res.Outcome {
 	case testunit.Skip:
 		fmt.Fprintf(logger.Buffer, "%s %s: %s\n", skipMark, res.ID, res.Comment)
