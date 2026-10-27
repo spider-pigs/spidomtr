@@ -182,7 +182,7 @@ Press <kbd>Ctrl</kbd>+<kbd>C</kbd> to stop a run early: in-flight requests are c
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-m` | `GET` | HTTP method |
-| `-H` | | request header `"Key: Value"`, repeatable |
+| `-H` | | request header `"Key: Value"`, repeatable. Requests send `User-Agent: spidomtr/<version>` unless you set your own (`-H 'User-Agent:'` sends none) |
 | `-d` | | request body |
 | `-D` | | read the request body from a file (cannot be combined with `-d`) |
 | `-expect` | any status < 400 | comma-separated list of accepted status codes, e.g. `200,204` |

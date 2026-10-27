@@ -120,6 +120,33 @@ func TestRunAgainstServer(t *testing.T) {
 	}
 }
 
+func TestRunUserAgent(t *testing.T) {
+	agents := make(chan []string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		agents <- r.Header.Values("User-Agent")
+	}))
+	defer srv.Close()
+
+	cases := []struct {
+		name  string
+		flags []string
+		check func([]string) bool
+	}{
+		{"default", nil, func(ua []string) bool { return len(ua) == 1 && strings.HasPrefix(ua[0], "spidomtr") }},
+		{"override", []string{"-H", "user-agent: custom/1.0"}, func(ua []string) bool { return len(ua) == 1 && ua[0] == "custom/1.0" }},
+		{"disabled", []string{"-H", "User-Agent:"}, func(ua []string) bool { return len(ua) == 0 }},
+	}
+	for _, c := range cases {
+		args := append([]string{"-n", "1", "-no-logo", "-progress=false"}, c.flags...)
+		if code := run(context.Background(), append(args, srv.URL), io.Discard); code != 0 {
+			t.Fatalf("%s: exit code = %d", c.name, code)
+		}
+		if ua := <-agents; !c.check(ua) {
+			t.Errorf("%s: User-Agent = %q", c.name, ua)
+		}
+	}
+}
+
 func TestRunHostHeader(t *testing.T) {
 	hosts := make(chan string, 1)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
